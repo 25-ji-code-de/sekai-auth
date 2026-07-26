@@ -1,6 +1,6 @@
 {
   "name": "@25-ji-code-de/sekai-auth",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "SEKAI Pass 浏览器端 OAuth 2.1 + PKCE 客户端 — 零依赖，ESM 与 IIFE 双产物",
   "type": "module",
   "main": "src/index.js",

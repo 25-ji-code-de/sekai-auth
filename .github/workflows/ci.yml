@@ -18,5 +18,14 @@ jobs:
         run: npm test
       - name: Build bundles
         run: npm run build
+      # dist/ 是提交进仓库的（下游静态站要内联引用它）。
+      # 这里确保它没有被手改、也没有落后于 src/。
+      - name: Verify committed dist/ is in sync with src/
+        run: |
+          if ! git diff --exit-code --stat -- dist/; then
+            echo "::error::dist/ 与 src/ 不同步。请在本地跑 npm run build 并提交结果。"
+            exit 1
+          fi
+          echo "dist/ 与 src/ 一致"
       - name: Type-check declarations
         run: npx -y -p typescript@5.9 tsc --noEmit

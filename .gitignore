@@ -1,8 +1,9 @@
 # Dependencies
 node_modules/
 
-# Build output
-dist/
+# dist/ 是**提交**的：hub / 25ji / nightcord 没有构建步骤，只能内联引用
+# dist/sekai-auth.global.js，而内联校验要从上游 tag 拉原文比对，
+# 所以产物必须存在于仓库里。CI 会验证它与 src/ 严格同步。
 
 # Logs
 *.log
