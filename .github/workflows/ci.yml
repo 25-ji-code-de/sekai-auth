@@ -28,4 +28,4 @@ jobs:
           fi
           echo "dist/ 与 src/ 一致"
       - name: Type-check declarations
-        run: npx -y -p typescript@5.9 tsc --noEmit
+        run: npm run type-check
