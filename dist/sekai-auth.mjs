@@ -446,6 +446,13 @@ export class SekaiAuth {
       );
     }
 
+    // sub：用户身份本身。缺了它，调用方拿到的是 `claims.sub === undefined` ——
+    // 而应用通常拿 sub 当主键，于是所有缺 sub 的 token 都映射到**同一个**用户。
+    // OIDC Core §2 把它列为 REQUIRED。
+    if (typeof claims.sub !== 'string' || claims.sub === '') {
+      throw new SekaiAuthError('ID token is missing sub', { code: 'invalid_id_token' });
+    }
+
     // aud：必须包含本 client
     const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
     if (!audiences.includes(this.clientId)) {
@@ -454,11 +461,40 @@ export class SekaiAuth {
       });
     }
 
+    /*
+     * azp（authorized party）—— OIDC Core §3.1.3.7。
+     *
+     * `aud` 只说明「这个 token 可以被谁接受」，`azp` 说明「它是为谁签的」。
+     * 两者不同时，一个签给**别的客户端**、只是顺带把我们列进 aud 的 token，
+     * 在只查 aud 的实现里会被当成「这个用户在我们这里登录了」。
+     *
+     * 规范：多 aud 时 SHOULD 验 azp 存在；azp 存在时 SHOULD 验它等于自己的
+     * client_id。这里两条都做成硬性检查 —— 这是个给别人用的 SDK，
+     * 「SHOULD」在这种位置上没有放宽的理由。
+     */
+    if (claims.azp !== undefined && claims.azp !== this.clientId) {
+      throw new SekaiAuthError(
+        `ID token azp is another client: ${claims.azp}`,
+        { code: 'invalid_id_token' },
+      );
+    }
+    if (audiences.length > 1 && claims.azp === undefined) {
+      throw new SekaiAuthError(
+        'ID token has multiple audiences but no azp',
+        { code: 'invalid_id_token' },
+      );
+    }
+
     const now = Math.floor(Date.now() / 1000);
     if (typeof claims.exp !== 'number' || claims.exp + clockSkewSec < now) {
       throw new SekaiAuthError('ID token has expired', { code: 'invalid_id_token' });
     }
-    if (typeof claims.iat === 'number' && claims.iat - clockSkewSec > now) {
+    // iat 是 REQUIRED（§2）。此前只在它**存在**时检查「不能是未来」——
+    // 于是干脆不带 iat 的 token 一路畅通。
+    if (typeof claims.iat !== 'number') {
+      throw new SekaiAuthError('ID token is missing iat', { code: 'invalid_id_token' });
+    }
+    if (claims.iat - clockSkewSec > now) {
       throw new SekaiAuthError('ID token was issued in the future', {
         code: 'invalid_id_token',
       });
