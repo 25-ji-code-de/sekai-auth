@@ -262,11 +262,96 @@ describe('validateIdToken —— claim', () => {
     await assert.rejects(() => auth.validateIdToken(token), /audience/);
   });
 
-  test('aud 是数组且包含本 client 时通过', async () => {
+  test('aud 是数组、且有正确的 azp 时通过', async () => {
+    const auth = makeAuth();
+    stubFetch();
+    const token = await signIdToken(
+      baseClaims({ aud: ['other', CLIENT_ID], azp: CLIENT_ID }),
+    );
+    assert.ok(await auth.validateIdToken(token));
+  });
+
+  /*
+   * 下面三条是对 OIDC Core §3.1.3.7 的补齐。
+   *
+   * 这个测试文件此前有一条「aud 是数组且包含本 client 时通过」——
+   * 断言的正是这里要拒掉的形状。**是我自己把不合规的行为写成了测试。**
+   *
+   * `aud` 只说明「这个 token 可以被谁接受」，`azp` 说明「它是为谁签的」。
+   * 一个签给别的客户端、只是顺带把我们列进 `aud` 的 token，在只查 `aud`
+   * 的实现里会被当成「这个用户在我们这里登录了」。
+   */
+
+  test('aud 多值但没有 azp —— 拒', async () => {
     const auth = makeAuth();
     stubFetch();
     const token = await signIdToken(baseClaims({ aud: ['other', CLIENT_ID] }));
-    assert.ok(await auth.validateIdToken(token));
+    await assert.rejects(() => auth.validateIdToken(token), /multiple audiences but no azp/);
+  });
+
+  test('azp 指向别的 client —— 拒（哪怕 aud 里有我们）', async () => {
+    const auth = makeAuth();
+    stubFetch();
+    const token = await signIdToken(
+      baseClaims({ aud: ['other', CLIENT_ID], azp: 'other' }),
+    );
+    await assert.rejects(() => auth.validateIdToken(token), /azp is another client/);
+  });
+
+  test('单 aud 时 azp 若存在也要对得上', async () => {
+    // 规范说的是「azp 存在就验」，不限于多 aud 的情形
+    const auth = makeAuth();
+    stubFetch();
+    const token = await signIdToken(baseClaims({ azp: 'someone_else' }));
+    await assert.rejects(() => auth.validateIdToken(token), /azp is another client/);
+  });
+
+  test('单 aud、无 azp —— 通过（最常见的形状，不能被误伤）', async () => {
+    const auth = makeAuth();
+    stubFetch();
+    assert.ok(await auth.validateIdToken(await signIdToken(baseClaims())));
+  });
+
+  test('缺 sub —— 拒', async () => {
+    /*
+     * sub 是用户身份本身。缺了它，调用方拿到 `claims.sub === undefined`，
+     * 而应用通常拿 sub 当主键 —— 于是**所有缺 sub 的 token 映射到同一个用户**。
+     */
+    const auth = makeAuth();
+    stubFetch();
+    const { sub, ...withoutSub } = baseClaims();
+    // 先签好再断言 —— assert.rejects 的箭头函数里不能写 await
+    const token = await signIdToken(withoutSub);
+    await assert.rejects(() => auth.validateIdToken(token), /missing sub/);
+  });
+
+  test('sub 是空串或非字符串 —— 拒', async () => {
+    const auth = makeAuth();
+    for (const bad of ['', 123, null, {}]) {
+      stubFetch();
+      const token = await signIdToken(baseClaims({ sub: bad }));
+      await assert.rejects(
+        () => auth.validateIdToken(token),
+        /missing sub/,
+        `sub=${JSON.stringify(bad)} 被接受了`,
+      );
+    }
+  });
+
+  test('缺 iat —— 拒', async () => {
+    // 此前只在 iat **存在**时检查「不能是未来」，于是干脆不带 iat 的一路畅通
+    const auth = makeAuth();
+    stubFetch();
+    const { iat, ...withoutIat } = baseClaims();
+    const token = await signIdToken(withoutIat);
+    await assert.rejects(() => auth.validateIdToken(token), /missing iat/);
+  });
+
+  test('iat 不是数字 —— 拒', async () => {
+    const auth = makeAuth();
+    stubFetch();
+    const token = await signIdToken(baseClaims({ iat: '1700000000' }));
+    await assert.rejects(() => auth.validateIdToken(token), /missing iat/);
   });
 
   test('过期被拒（容忍 60 秒偏移）', async () => {
