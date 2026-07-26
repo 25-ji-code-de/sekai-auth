@@ -1,0 +1,51 @@
+{
+  "name": "@25-ji-code-de/sekai-auth",
+  "version": "0.1.0",
+  "description": "SEKAI Pass 浏览器端 OAuth 2.1 + PKCE 客户端 — 零依赖，ESM 与 IIFE 双产物",
+  "type": "module",
+  "main": "src/index.js",
+  "module": "src/index.js",
+  "exports": {
+    ".": {
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    },
+    "./global": "./dist/sekai-auth.global.js"
+  },
+  "files": [
+    "src",
+    "dist",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test \"test/*.test.mjs\"",
+    "check": "node --check src/index.js && npm test"
+  },
+  "keywords": [
+    "sekai",
+    "sekai-pass",
+    "oauth2",
+    "oauth2.1",
+    "oidc",
+    "pkce",
+    "sso",
+    "browser"
+  ],
+  "author": "The 25-ji-code-de Team",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/25-ji-code-de/sekai-auth.git"
+  },
+  "homepage": "https://github.com/25-ji-code-de/sekai-auth#readme",
+  "bugs": {
+    "url": "https://github.com/25-ji-code-de/sekai-auth/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
