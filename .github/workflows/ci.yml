@@ -18,3 +18,5 @@ jobs:
         run: npm test
       - name: Build bundles
         run: npm run build
+      - name: Type-check declarations
+        run: npx -y -p typescript@5.9 tsc --noEmit

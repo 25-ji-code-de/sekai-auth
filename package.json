@@ -1,12 +1,14 @@
 {
   "name": "@25-ji-code-de/sekai-auth",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "SEKAI Pass 浏览器端 OAuth 2.1 + PKCE 客户端 — 零依赖，ESM 与 IIFE 双产物",
   "type": "module",
   "main": "src/index.js",
   "module": "src/index.js",
+  "types": "types/index.d.ts",
   "exports": {
     ".": {
+      "types": "./types/index.d.ts",
       "import": "./src/index.js",
       "default": "./src/index.js"
     },
@@ -14,6 +16,7 @@
   },
   "files": [
     "src",
+    "types",
     "dist",
     "LICENSE",
     "NOTICE",
@@ -23,6 +26,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "node --test \"test/*.test.mjs\"",
+    "type-check": "tsc --noEmit",
     "check": "node --check src/index.js && npm test"
   },
   "keywords": [
