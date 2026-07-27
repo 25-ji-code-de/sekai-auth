@@ -21,6 +21,14 @@ export function base64UrlEncode(buffer: ArrayBuffer | Uint8Array): string;
 /** 由 code_verifier 计算 S256 code_challenge。 */
 export function computeCodeChallenge(verifier: string): Promise<string>;
 
+/**
+ * 解出 JWT 的 payload，**不验签**。
+ *
+ * 只适合读取展示用的 claim。任何安全判断都要走 {@link SekaiAuth.validateIdToken}。
+ * 输入畸形时返回 `null` 而不是抛错。
+ */
+export function decodeJwtPayload(token: string): Record<string, unknown> | null;
+
 /** 归一化后的用户 profile。 */
 export interface SekaiProfile {
   sub: string | null;
@@ -69,6 +77,7 @@ export interface SekaiStorageKeys {
   user?: string;
   codeVerifier?: string;
   state?: string;
+  nonce?: string;
 }
 
 export interface SekaiAuthOptions {
@@ -125,8 +134,27 @@ export class SekaiAuth {
   /** 生成 PKCE 参数并跳转授权端点。 */
   login(): Promise<void>;
 
-  /** 换取 token。省略参数时从 `location.search` 读 code / state / error。 */
+  /**
+   * 换取 token。省略参数时从 `location.search` 读 code / state / error。
+   *
+   * 响应里带 `id_token` 时会自动调用 {@link validateIdToken}
+   * 并比对本次请求发出的 nonce —— 校验不过会抛，不会返回 token。
+   */
   handleCallback(code?: string, state?: string): Promise<TokenResponse>;
+
+  /**
+   * 验证 ID Token：JWKS 签名 + `iss` / `aud` / `exp` / `iat` / `nonce`。
+   *
+   * 只接受 ES256 与 RS256；`alg: none` 与对称算法一律拒绝。
+   * 校验不通过抛 {@link SekaiAuthError}（`code: 'invalid_id_token'`）。
+   *
+   * @param options.nonce 期望的 nonce；给了就必须匹配，`null` 表示跳过该项
+   * @param options.clockSkewSec 时钟容差，默认 60 秒
+   */
+  validateIdToken(
+    idToken: string,
+    options?: { nonce?: string | null; clockSkewSec?: number },
+  ): Promise<Record<string, unknown>>;
 
   /** 返回有效 access token，必要时自动刷新；失败返回 `null`（不抛）。 */
   getAccessToken(): Promise<string | null>;

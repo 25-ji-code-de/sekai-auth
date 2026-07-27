@@ -14,6 +14,7 @@ import {
   SekaiAuthError,
   normalizeProfile,
   computeCodeChallenge,
+  decodeJwtPayload,
   randomHex,
   base64UrlEncode,
   SEKAI_PASS_ENDPOINTS,
@@ -81,7 +82,29 @@ async function exercise(): Promise<void> {
 
   // 解析后的 key 全部可读
   const keyName: string = hubAuth.keys.accessToken;
+  const nonceKey: string = hubAuth.keys.nonce;
   void keyName;
+  void nonceKey;
+}
+
+async function oidc(): Promise<void> {
+  const tokens = await makerAuth.handleCallback();
+
+  if (tokens.id_token) {
+    // 展示用：不验签，容忍畸形输入
+    const unsafe: Record<string, unknown> | null = decodeJwtPayload(tokens.id_token);
+    void unsafe?.sub;
+
+    // 安全判断用：验签 + claim
+    const claims: Record<string, unknown> = await makerAuth.validateIdToken(tokens.id_token, {
+      nonce: 'n1',
+      clockSkewSec: 30,
+    });
+    void claims.sub;
+
+    await makerAuth.validateIdToken(tokens.id_token);
+    await makerAuth.validateIdToken(tokens.id_token, { nonce: null });
+  }
 }
 
 async function helpers(): Promise<void> {
@@ -110,5 +133,6 @@ function errors(err: unknown): void {
 }
 
 void exercise;
+void oidc;
 void helpers;
 void errors;

@@ -36,6 +36,7 @@ const EXPORTED = [
   'createSekaiAuth',
   'SEKAI_PASS_ENDPOINTS',
   'SEKAI_PASS_ISSUER',
+  'decodeJwtPayload',
 ];
 
 const body = source
