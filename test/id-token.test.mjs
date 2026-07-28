@@ -431,8 +431,10 @@ describe('handleCallback 串起整条链路', () => {
   });
 
   test('ID Token 的 nonce 与本次请求不符时整个回调失败', async () => {
-    const { run } = await loginThenCallback({}, { tamperNonce: true });
+    const { auth, run } = await loginThenCallback({}, { tamperNonce: true });
     await assert.rejects(run, /nonce mismatch/);
+    assert.equal(auth._local.getItem(auth.keys.accessToken), null);
+    assert.equal(auth._local.getItem(auth.keys.refreshToken), null);
   });
 
   test('回调结束后 nonce 被清掉，不能重复使用', async () => {

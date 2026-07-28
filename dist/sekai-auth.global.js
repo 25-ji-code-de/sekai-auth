@@ -193,6 +193,9 @@ class SekaiAuth {
    * @param {() => void} [options.onAuthExpired] refresh token 失效时触发
    * @param {Storage} [options.localStorage]
    * @param {Storage} [options.sessionStorage]
+   * @param {typeof fetch} [options.fetch] HTTP transport；默认调用 `globalThis.fetch`
+   * @param {(url: string) => void|Promise<void>} [options.navigate]
+   *        授权页导航；默认写入 `globalThis.location.href`
    */
   constructor(options = {}) {
     if (!options.clientId) {
@@ -222,6 +225,18 @@ class SekaiAuth {
 
     this._local = options.localStorage ?? globalThis.localStorage;
     this._session = options.sessionStorage ?? globalThis.sessionStorage;
+
+    // Transport hooks：native shell / 测试可注入。不传时与旧行为逐字一致。
+    // 默认路径在**调用时**再取 globalThis.fetch / location —— 不能在构造时 bind，
+    // 否则测试（以及运行时替换 polyfill）改了全局也接不上。
+    this._fetch =
+      options.fetch ??
+      ((...args) => globalThis.fetch(...args));
+    this._navigate =
+      options.navigate ??
+      ((url) => {
+        globalThis.location.href = url;
+      });
 
     /** @type {Promise<string|null>|null} single-flight refresh */
     this._refreshPromise = null;
@@ -256,7 +271,7 @@ class SekaiAuth {
     const url = `${this.issuer.replace(/\/$/, '')}/.well-known/openid-configuration`;
     let doc;
     try {
-      const response = await fetch(url);
+      const response = await this._fetch(url);
       if (!response.ok) {
         throw new SekaiAuthError(`OIDC discovery failed: HTTP ${response.status}`, {
           code: 'discovery_failed',
@@ -333,7 +348,7 @@ class SekaiAuth {
       this._session.removeItem(this.keys.nonce);
     }
 
-    globalThis.location.href = `${endpoints.authorize}?${params.toString()}`;
+    await this._navigate(`${endpoints.authorize}?${params.toString()}`);
   }
 
   /**
@@ -387,18 +402,21 @@ class SekaiAuth {
       code_verifier: codeVerifier,
     });
 
-    // 先取出本次流程存下的 nonce，再清 PKCE 状态
+    // 先取出本次流程存下的 nonce。ID Token 必须在落盘 token 之前验完：
+    // 否则验签失败会把攻击者提供的 access/refresh token 留在本地。
     const expectedNonce = this._session.getItem(this.keys.nonce);
 
-    this._persistTokens(tokens);
-    this._clearPkce();
-
-    // 拿到 ID Token 就必须验 —— 否则 nonce 只是走了个过场
-    if (tokens.id_token) {
-      await this.validateIdToken(tokens.id_token, { nonce: expectedNonce });
+    try {
+      // 拿到 ID Token 就必须验 —— 否则 nonce 只是走了个过场
+      if (tokens.id_token) {
+        await this.validateIdToken(tokens.id_token, { nonce: expectedNonce });
+      }
+      this._persistTokens(tokens);
+      return tokens;
+    } finally {
+      // 成功失败都作废 PKCE 临时状态，防止回放。
+      this._clearPkce();
     }
-
-    return tokens;
   }
 
   /**
@@ -590,7 +608,7 @@ class SekaiAuth {
         });
       }
 
-      const response = await fetch(uri);
+      const response = await this._fetch(uri);
       if (!response.ok) {
         throw new SekaiAuthError(`JWKS fetch failed: HTTP ${response.status}`, {
           code: 'jwks_failed',
@@ -674,7 +692,7 @@ class SekaiAuth {
   async _postToken(url, body) {
     let response;
     try {
-      response = await fetch(url, {
+      response = await this._fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams(body),
@@ -738,7 +756,7 @@ class SekaiAuth {
     }
 
     try {
-      const response = await fetch(endpoints.userinfo, {
+      const response = await this._fetch(endpoints.userinfo, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) {
@@ -814,7 +832,7 @@ class SekaiAuth {
         const fire = (token, hint) => {
           if (!token) return;
           try {
-            void fetch(url, {
+            void this._fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
               body: new URLSearchParams({
@@ -836,7 +854,7 @@ class SekaiAuth {
     }
 
     this._clearTokens();
-    if (redirectTo) globalThis.location.href = redirectTo;
+    if (redirectTo) await this._navigate(redirectTo);
   }
 
   /** 清空 token 与缓存的用户信息，但不动正在进行的 PKCE 流程。 */

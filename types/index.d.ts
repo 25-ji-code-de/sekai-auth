@@ -98,6 +98,16 @@ export interface SekaiAuthOptions {
   onAuthExpired?: (error?: unknown) => void;
   localStorage?: Storage;
   sessionStorage?: Storage;
+  /**
+   * HTTP transport。默认 `globalThis.fetch`。
+   * native shell（CapacitorHttp 等）或测试可注入。
+   */
+  fetch?: typeof fetch;
+  /**
+   * 授权页 / logout 跳转。默认写入 `location.href`。
+   * native shell 可注入系统浏览器打开。
+   */
+  navigate?: (url: string) => void | Promise<void>;
 }
 
 export interface TokenResponse {

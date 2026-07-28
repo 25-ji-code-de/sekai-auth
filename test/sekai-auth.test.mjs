@@ -548,3 +548,131 @@ describe('login', () => {
     assert.equal(url.searchParams.get('state'), auth._session.getItem(auth.keys.state));
   });
 });
+
+describe('transport hooks', () => {
+  test('注入 navigate 时 login 不写 location.href', async () => {
+    let navigated = '';
+    let locationTouched = false;
+    globalThis.location = {
+      origin: 'https://app.example',
+      search: '',
+      set href(_v) {
+        locationTouched = true;
+      },
+      get href() {
+        return '';
+      },
+    };
+
+    const auth = makeAuth({
+      navigate: (url) => {
+        navigated = url;
+      },
+    });
+    await auth.login();
+
+    assert.equal(locationTouched, false);
+    const url = new URL(navigated);
+    assert.equal(url.origin + url.pathname, 'https://id.example/oauth/authorize');
+    assert.equal(url.searchParams.get('client_id'), 'test_client');
+    assert.ok(auth._session.getItem(auth.keys.codeVerifier));
+  });
+
+  test('注入 fetch 时 token 交换不走 globalThis.fetch', async () => {
+    let globalFetchCalls = 0;
+    globalThis.fetch = async () => {
+      globalFetchCalls += 1;
+      throw new Error('global fetch should not be used');
+    };
+
+    const injectedCalls = [];
+    const auth = makeAuth({
+      fetch: async (url, init) => {
+        injectedCalls.push({ url: String(url), init });
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600 }),
+          text: async () => '',
+        };
+      },
+    });
+    auth._session.setItem(auth.keys.state, 's1');
+    auth._session.setItem(auth.keys.codeVerifier, 'v1');
+
+    const tokens = await auth.handleCallback('CODE', 's1');
+    assert.equal(tokens.access_token, 'AT');
+    assert.equal(globalFetchCalls, 0);
+    assert.equal(injectedCalls.length, 1);
+    assert.equal(injectedCalls[0].url, 'https://id.example/oauth/token');
+    assert.equal(injectedCalls[0].init.body.get('code_verifier'), 'v1');
+  });
+
+  test('注入 fetch 时 discovery / userinfo 也走它', async () => {
+    let globalFetchCalls = 0;
+    globalThis.fetch = async () => {
+      globalFetchCalls += 1;
+      throw new Error('global fetch should not be used');
+    };
+
+    const calls = [];
+    const auth = makeAuth({
+      endpoints: undefined,
+      issuer: 'https://id.example',
+      fetch: async (url, init) => {
+        calls.push({ url: String(url), init });
+        if (String(url).includes('openid-configuration')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              authorization_endpoint: 'https://id.example/oauth/authorize',
+              token_endpoint: 'https://id.example/oauth/token',
+              userinfo_endpoint: 'https://id.example/oauth/userinfo',
+            }),
+            text: async () => '',
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ sub: 'u1', preferred_username: 'miku' }),
+          text: async () => '',
+        };
+      },
+    });
+
+    const endpoints = await auth.getEndpoints();
+    assert.equal(endpoints.userinfo, 'https://id.example/oauth/userinfo');
+
+    auth._local.setItem(auth.keys.accessToken, 'AT');
+    auth._local.setItem(auth.keys.expiresAt, String(Date.now() + 60 * 60 * 1000));
+    const info = await auth.getUserInfo();
+    assert.equal(info.sub, 'u1');
+    assert.equal(globalFetchCalls, 0);
+    assert.equal(calls.length, 2);
+  });
+
+  test('logout 的 redirectTo 也走 navigate', async () => {
+    let navigated = '';
+    let locationTouched = false;
+    globalThis.location = {
+      set href(_v) {
+        locationTouched = true;
+      },
+      get href() {
+        return '';
+      },
+    };
+
+    const auth = makeAuth({
+      navigate: (url) => {
+        navigated = url;
+      },
+    });
+    auth._local.setItem(auth.keys.accessToken, 'AT');
+    await auth.logout({ revoke: false, redirectTo: 'https://app.example/' });
+    assert.equal(navigated, 'https://app.example/');
+    assert.equal(locationTouched, false);
+  });
+});
