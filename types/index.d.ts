@@ -84,7 +84,7 @@ export interface SekaiAuthOptions {
   clientId: string;
   /** 默认 `${location.origin}/callback`。 */
   redirectUri?: string;
-  /** 默认 `openid profile email`。 */
+  /** 默认 `openid profile`。需要邮箱的客户端应显式申请 `email`。 */
   scope?: string;
   /** 与 `issuer` 二选一。 */
   endpoints?: SekaiEndpoints;

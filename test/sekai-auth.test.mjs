@@ -537,7 +537,7 @@ describe('login', () => {
     assert.equal(url.searchParams.get('response_type'), 'code');
     assert.equal(url.searchParams.get('client_id'), 'test_client');
     assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
-    assert.equal(url.searchParams.get('scope'), 'openid profile email');
+    assert.equal(url.searchParams.get('scope'), 'openid profile');
 
     const verifier = auth._session.getItem(auth.keys.codeVerifier);
     assert.equal(verifier.length, 128, 'code_verifier 应为 128 字符（RFC 7636 上限）');
