@@ -182,7 +182,7 @@ export class SekaiAuth {
    * @param {object} options
    * @param {string} options.clientId
    * @param {string} [options.redirectUri] 默认 `${location.origin}/callback`
-   * @param {string} [options.scope] 默认 `openid profile email`
+   * @param {string} [options.scope] 默认 `openid profile`
    * @param {{authorize: string, token: string, userinfo: string, revoke?: string}} [options.endpoints]
    * @param {string} [options.issuer] 走 OIDC discovery 时的 issuer
    * @param {string} [options.storagePrefix] 默认 `sekai_`
@@ -207,7 +207,7 @@ export class SekaiAuth {
 
     this.clientId = options.clientId;
     this.redirectUri = options.redirectUri || `${globalThis.location?.origin ?? ''}/callback`;
-    this.scope = options.scope || 'openid profile email';
+    this.scope = options.scope || 'openid profile';
     this.issuer = options.issuer;
     this.onAuthExpired = options.onAuthExpired;
 
